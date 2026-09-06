@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multilingual Audiobook Reader</title>
+    <script src="https://jsdelivr.net"></script>
+    <script src="https://cloudflare.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-slate-800 p-6 rounded-2xl shadow-xl w-full max-w-2xl border border-slate-700">
+        <h1 class="text-2xl font-bold text-center mb-6 text-emerald-400">📚 Multilingual Audiobook Reader</h1>
+        
+        <!-- File Picker -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-2 text-slate-300">Upload Document (.txt, .docx):</label>
+            <div class="flex items-center justify-center w-full">
+                <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-600 border-dashed rounded-xl cursor-pointer bg-slate-900 hover:bg-slate-850 hover:border-emerald-500 transition-colors">
+                    <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                        <p class="mb-2 text-sm text-slate-400"><span class="font-semibold">Click to select file</span> or drag it here</p>
+                        <p class="text-xs text-slate-500">Supports Plain Text or Word Documents</p>
+                    </div>
+                    <input id="fileInput" type="file" accept=".txt,.docx" class="hidden" />
+                </label>
+            </div>
+            <div id="fileStatus" class="text-xs text-emerald-400 mt-2 hidden"></div>
+        </div>
+
+        <!-- Manual Input Box -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-2 text-slate-300">Or Input / Edit Text Below:</label>
+            <textarea id="textInput" rows="6" class="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl focus:outline-none focus:border-emerald-500 text-slate-100 placeholder-slate-500 resize-none" placeholder="Type, paste text, or load a document..."></textarea>
+        </div>
+
+        <!-- Custom Modifiers Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+                <label class="block text-sm font-medium mb-2 text-slate-300">Select Voice Accent:</label>
+                <select id="voiceSelect" class="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl focus:outline-none focus:border-emerald-500 text-slate-100">
+                    <option value="en-IN-NeerjaNeural">English (India) - Neerja</option>
+                    <option value="kn-IN-SapnaNeural">Kannada (ಕನ್ನಡ) - Sapna</option>
+                    <option value="te-IN-ShrutiNeural">Telugu (తెలుగు) - Shruti</option>
+                    <option value="hi-IN-SwaraNeural">Hindi (हिंदी) - Swara</option>
+                    <option value="ta-IN-PallaviNeural">Tamil (தமிழ்) - Pallavi</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-slate-300">Speed Multiplier: <span id="speedVal" class="text-emerald-400 font-bold">1.0x</span></label>
+                <input id="speedRange" type="range" min="0.5" max="2.0" step="0.1" value="1.0" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500 mt-3">
+            </div>
+        </div>
+
+        <!-- Submit Event -->
+        <div class="mb-6">
+            <button id="generateBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-bold py-3 px-4 rounded-xl transition duration-200 cursor-pointer shadow-lg shadow-emerald-500/10">
+                🎵 Compile Audio Output
+            </button>
+        </div>
+
+        <!-- Media Context -->
+        <div id="playerContainer" class="hidden border-t border-slate-700 pt-6">
+            <p class="text-sm font-medium mb-2 text-slate-400 text-center font-mono">Audio Track Native Processing:</p>
+            <audio id="audioPlayer" controls class="w-full accent-emerald-500 bg-slate-900 rounded-xl p-2"></audio>
+        </div>
+    </div>
+
+    <script>
+        const speedRange = document.getElementById('speedRange');
+        const speedVal = document.getElementById('speedVal');
+        const generateBtn = document.getElementById('generateBtn');
+        const textInput = document.getElementById('textInput');
+        const fileInput = document.getElementById('fileInput');
+        const fileStatus = document.getElementById('fileStatus');
+        const voiceSelect = document.getElementById('voiceSelect');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const playerContainer = document.getElementById('playerContainer');
+
+        speedRange.addEventListener('input', (e) => {
+            speedVal.textContent = e.target.value + 'x';
+        });
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            fileStatus.textContent = `📄 Opening File: ${file.name}...`;
+            fileStatus.classList.remove('hidden');
+
+            const reader = new FileReader();
+
+            if (file.name.endsWith('.txt')) {
+                reader.onload = function(evt) {
+                    textInput.value = evt.target.result;
+                    fileStatus.textContent = `✅ Loaded plain text file successfully.`;
+                };
+                reader.readAsText(file);
+            } else if (file.name.endsWith('.docx')) {
+                reader.onload = function(evt) {
+                    const arrayBuffer = evt.target.result;
+                    mammoth.extractRawText({ arrayBuffer: arrayBuffer })
+                        .then(function(result) {
+                            textInput.value = result.value;
+                            fileStatus.textContent = `✅ Successfully extracted text from Word file.`;
+                        })
+                        .catch(function(err) {
+                            fileStatus.textContent = `❌ Unable to process this Word document.`;
+                            console.error(err);
+                        });
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        generateBtn.addEventListener('click', () => {
+            const text = textInput.value.trim();
+            const voice = voiceSelect.value;
+            const speedFactor = parseFloat(speedRange.value);
+
+            if (!text) {
+                alert('Please upload a file or write some text before continuing.');
+                return;
+            }
+
+            generateBtn.textContent = '⏳ Rendering Stream Engine...';
+            generateBtn.disabled = true;
+
+            let ratePct = 0;
+            if (speedFactor >= 1.0) {
+                ratePct = `+${Math.round((speedFactor - 1.0) * 100)}%`;
+            } else {
+                ratePct = `${Math.round((1.0 - speedFactor) * -100)}%`;
+            }
+
+            const encodedText = encodeURIComponent(text);
+            const ttsUrl = `https://suenghao.top{encodedText}&voice=${voice}&rate=${ratePct}`;
+
+            audioPlayer.src = ttsUrl;
+            playerContainer.classList.remove('hidden');
+            
+            audioPlayer.oncanplaythrough = () => {
+                generateBtn.textContent = '🎵 Compile Audio Output';
+                generateBtn.disabled = false;
+                audioPlayer.play();
+            };
+
+            audioPlayer.onerror = () => {
+                alert('An operational server timeout occurred. Try dividing your content into shorter sections.');
+                generateBtn.textContent = '🎵 Compile Audio Output';
+                generateBtn.disabled = false;
+            };
+        });
+    </script>
+</body>
+              </html>
+              
